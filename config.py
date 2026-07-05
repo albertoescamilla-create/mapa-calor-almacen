@@ -85,7 +85,7 @@ DIAS_CRITICOS = [
 # STREAMLIT
 # =====================================
 
-TITULO_APP = "🔥 Mapa de Calor del Almacén"
+TITULO_APP = "🔥 Mapa de Calor del Almacén LS"
 
 ICONO_APP = "🔥"
 
