@@ -1,0 +1,1 @@
+# mapa-calor-almacen
