@@ -7,10 +7,8 @@ def obtener_color(dias, p25, p50, p75):
 
     if dias <= p25:
         return "🟢"
-
     elif dias <= p50:
         return "🟡"
-
     elif dias <= p75:
         return "🟠"
 
@@ -20,7 +18,10 @@ def obtener_color(dias, p25, p50, p75):
 def dibujar_heatmap(resumen, pasillo, p25, p50, p75):
 
     if "rack_seleccionado" not in st.session_state:
-        st.session_state["rack_seleccionado"] = None
+        st.session_state["rack_seleccionado"] = {
+            "pasillo": None,
+            "rack": None
+        }
 
     datos = resumen[
         resumen["pasillo_completo"] == pasillo
@@ -36,7 +37,6 @@ def dibujar_heatmap(resumen, pasillo, p25, p50, p75):
     racks = datos.to_dict("records")
 
     columnas = 6
-
     filas = math.ceil(len(racks) / columnas)
 
     indice = 0
@@ -51,7 +51,6 @@ def dibujar_heatmap(resumen, pasillo, p25, p50, p75):
                 break
 
             info = racks[indice]
-
             indice += 1
 
             rack = info["rack"]
@@ -66,7 +65,9 @@ def dibujar_heatmap(resumen, pasillo, p25, p50, p75):
             with col:
 
                 seleccionado = (
-                    st.session_state["rack_seleccionado"] == rack
+                    st.session_state["rack_seleccionado"]["pasillo"] == pasillo
+                    and
+                    st.session_state["rack_seleccionado"]["rack"] == rack
                 )
 
                 titulo = f"{icono} Rack {rack}"
@@ -79,7 +80,6 @@ def dibujar_heatmap(resumen, pasillo, p25, p50, p75):
                     st.markdown(f"### {titulo}")
 
                     st.write(f"🔥 **{int(info['dias_max'])} días**")
-
                     st.write(f"📦 **{int(info['palets'])} palets**")
 
                     if st.button(
@@ -88,8 +88,16 @@ def dibujar_heatmap(resumen, pasillo, p25, p50, p75):
                         use_container_width=True
                     ):
 
-                        st.session_state["rack_seleccionado"] = rack
+                        st.session_state["rack_seleccionado"] = {
+                            "pasillo": pasillo,
+                            "rack": rack
+                        }
 
                         st.rerun()
 
-    return st.session_state["rack_seleccionado"]
+    seleccion = st.session_state["rack_seleccionado"]
+
+    if seleccion["pasillo"] == pasillo:
+        return seleccion["rack"]
+
+    return None

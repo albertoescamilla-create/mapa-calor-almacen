@@ -11,12 +11,32 @@ from metrics import (
 from heatmap import dibujar_heatmap
 from pdf import LibroPasillo
 from rack import mostrar_rack
-from layout import LAYOUT
 
 
-# ==========================================
+# =====================================================
+# DEPARTAMENTOS
+# =====================================================
+
+DPTS = {
+    "01": "01 Materiales",
+    "02": "02 Madera",
+    "03": "03 Electricidad",
+    "04": "04 Herramientas",
+    "05": "05 Renovables",
+    "06": "06 Cerámica",
+    "07": "07 Sanitario",
+    "08": "08 Cocina y Armarios",
+    "09": "09 Jardín",
+    "10": "10 Ferretería",
+    "11": "11 Pintura",
+    "12": "12 Decoración",
+    "13": "13 Iluminación",
+}
+
+
+# =====================================================
 # CONFIGURACIÓN
-# ==========================================
+# =====================================================
 
 st.set_page_config(
     page_title=TITULO_APP,
@@ -25,52 +45,72 @@ st.set_page_config(
 )
 
 st.title(TITULO_APP)
+st.caption("Versión 1.1.0")
 
-st.caption("Versión 1.0.0")
 
 with st.sidebar:
+
     st.divider()
-    st.caption("Mapa de Calor del Almacén")
-    st.caption("v1.0.0")
+    st.caption("Mapa de Calor del Almacén LS")
+    st.caption("v1.1.0")
     st.caption("© Julio 2026")
     st.caption("Desarrollado por Alberto Escamilla")
 
-# ==========================================
-# SESSION STATE
-# ==========================================
+
+# =====================================================
+# SESSION
+# =====================================================
 
 if "rack_seleccionado" not in st.session_state:
-    st.session_state["rack_seleccionado"] = None
+    st.session_state["rack_seleccionado"] = {
+        "pasillo": None,
+        "rack": None
+    }
 
-# ==========================================
-# SUBIR CSV
-# ==========================================
+
+# =====================================================
+# CSV
+# =====================================================
 
 archivo = st.file_uploader(
     "Selecciona el CSV exportado desde Power BI",
-    type=["csv"]
+    type="csv"
 )
 
 if archivo is None:
-    st.info("Sube un archivo CSV para comenzar.")
+    st.info("Sube un CSV para comenzar.")
     st.stop()
 
-# ==========================================
-# LEER CSV
-# ==========================================
+
+# =====================================================
+# CARGA
+# =====================================================
 
 try:
+
     df = cargar_csv(archivo)
-    # Excluir altura de picking
+
+    # Ocultar picking
     df = df[df["altura"] != "10"].copy()
 
+    # Normalizar departamento
+    df["dpt"] = (
+        df["dpt"]
+        .fillna(0)
+        .astype(int)
+        .astype(str)
+        .str.zfill(2)
+    )
+
 except Exception as e:
-    st.error(str(e))
+
+    st.error(e)
     st.stop()
 
-# ==========================================
-# CALCULAR DATOS
-# ==========================================
+
+# =====================================================
+# MÉTRICAS
+# =====================================================
 
 kpis = calcular_kpis(df)
 
@@ -80,48 +120,27 @@ resumen = resumen_racks(df)
 
 dobles = detectar_doble_palets(df)
 
-# ==========================================
-# KPIs
-# ==========================================
+# =====================================================
+# KPIs GENERALES
+# =====================================================
 
 c1, c2, c3, c4, c5 = st.columns(5)
 
-c1.metric(
-    "📦 Palets",
-    kpis["palets"]
-)
-
-c2.metric(
-    "⏳ Edad media",
-    f'{kpis["edad_media"]} días'
-)
-
-c3.metric(
-    "🚨 Rack crítico",
-    kpis["rack_critico"]
-)
-
-c4.metric(
-    "🔥 >90 días",
-    kpis["mas_90"]
-)
-
-c5.metric(
-    "⚠️ Dobles ubicaciones",
-    len(dobles)
-)
+c1.metric("📦 Palets", kpis["palets"])
+c2.metric("⏳ Edad media", f'{kpis["edad_media"]} días')
+c3.metric("🚨 Rack crítico", kpis["rack_critico"])
+c4.metric("🔥 >90 días", kpis["mas_90"])
+c5.metric("⚠️ Dobles", len(dobles))
 
 st.divider()
 
-# ==========================================
+# =====================================================
 # INCIDENCIAS
-# ==========================================
+# =====================================================
 
 if not dobles.empty:
 
-    with st.expander(
-        f"⚠️ Ver {len(dobles)} dobles ubicaciones"
-    ):
+    with st.expander(f"⚠️ Ver {len(dobles)} dobles ubicaciones"):
 
         st.dataframe(
             dobles,
@@ -129,9 +148,9 @@ if not dobles.empty:
             use_container_width=True
         )
 
-# ==========================================
+# =====================================================
 # LEYENDA
-# ==========================================
+# =====================================================
 
 st.subheader("Leyenda")
 
@@ -144,93 +163,267 @@ l4.metric("🔴 Rojo", f"> {int(p75)} días")
 
 st.divider()
 
-# ==========================================
-# PASILLO
-# ==========================================
+# =====================================================
+# SELECTOR
+# =====================================================
 
-pasillos = sorted(df["pasillo_completo"].unique())
+opciones = []
 
-pasillo = st.selectbox(
-    "Selecciona un pasillo",
-    pasillos
+# Secciones
+
+for codigo in sorted(df["dpt"].unique()):
+
+    if codigo not in DPTS:
+        continue
+
+    opciones.append(
+        f"📂 {DPTS[codigo]}"
+    ) 
+
+# Pasillos
+
+for p in sorted(df["pasillo_completo"].unique()):
+
+    opciones.append(
+        f"📦 {p}"
+    )
+
+vista = st.selectbox(
+    "Selecciona una vista",
+    opciones
 )
 
-resumen_pasillo = resumen[
-    resumen["pasillo_completo"] == pasillo
-].copy()
+# =====================================================
+# MODO PASILLO / SECCIÓN
+# =====================================================
 
-df_pasillo = df[
-    df["pasillo_completo"] == pasillo
-].copy()
+es_pasillo = vista.startswith("📦")
 
-rack_critico = resumen_pasillo.loc[
-    resumen_pasillo["dias_max"].idxmax()
-]
+if es_pasillo:
 
-kpis_pasillo = {
-    "palets": df_pasillo["sscc"].nunique(),
-    "edad_media": round(df_pasillo["dias"].mean(), 1),
-    "rack_critico": rack_critico["rack"],
-    "mas_90": df_pasillo[df_pasillo["dias"] > 90]["sscc"].nunique()
-}
+    pasillo = vista.replace("📦 ", "")
 
-libro = LibroPasillo(
-    pasillo,
-    df_pasillo,
-    resumen_pasillo,
-    kpis_pasillo,
-    p25,
-    p50,
-    p75
-)
+    df_vista = df[
+        df["pasillo_completo"] == pasillo
+    ].copy()
 
-pdf = libro.generar()
+    resumen_vista = resumen_racks(df_vista)
+   
 
-st.download_button(
-    "📄 Descargar Libro de Pasillo",
-    data=pdf,
-    file_name=f"Libro_{pasillo}.pdf",
-    mime="application/pdf"
-)
+else:
 
-# ==========================================
-# DISEÑO PRINCIPAL
-# ==========================================
+    codigo = vista.replace("📂 ", "")[:2]
 
-col_mapa, col_detalle = st.columns([7, 3])
+    df_vista = df[
+         df["dpt"] == codigo
+    ].copy()
 
-# ==========================================
-# MAPA
-# ==========================================
+    resumen_vista = resumen_racks(df_vista)
 
-with col_mapa:
+# =====================================================
+# PDF (solo pasillos)
+# =====================================================
 
-    st.subheader("Mapa de calor")
+if es_pasillo:
 
-    rack = dibujar_heatmap(
-        resumen,
+    rack_critico = resumen_vista.loc[
+        resumen_vista["dias_max"].idxmax()
+    ]
+
+    kpis_pasillo = {
+
+        "palets": df_vista["sscc"].nunique(),
+
+        "edad_media": round(
+            df_vista["dias"].mean(),
+            1
+        ),
+
+        "rack_critico": rack_critico["rack"],
+
+        "mas_90": df_vista[
+            df_vista["dias"] > 90
+        ]["sscc"].nunique()
+
+    }
+
+    libro = LibroPasillo(
+
         pasillo,
+
+        df_vista,
+
+        resumen_vista,
+
+        kpis_pasillo,
+
         p25,
         p50,
         p75
+
     )
 
-# ==========================================
+    pdf = libro.generar()
+
+    st.download_button(
+
+        "📄 Descargar Libro de Pasillo",
+
+        data=pdf,
+
+        file_name=f"Libro_{pasillo}.pdf",
+
+        mime="application/pdf"
+
+    )
+# =====================================================
+# PDF (solo secciones)
+# =====================================================
+
+if not es_pasillo:
+
+    rack_critico = resumen_vista.loc[
+        resumen_vista["dias_max"].idxmax()
+    ]
+
+    kpis_seccion = {
+
+        "palets": df_vista["sscc"].nunique(),
+
+        "edad_media": round(
+            df_vista["dias"].mean(),
+            1
+        ),
+
+        "rack_critico": rack_critico["rack"],
+
+        "mas_90": df_vista[
+            df_vista["dias"] > 90
+        ]["sscc"].nunique()
+
+    }
+
+    libro = LibroPasillo(
+
+        DPTS[codigo],
+
+        df_vista,
+
+        resumen_vista,
+
+        kpis_seccion,
+
+        p25,
+
+        p50,
+
+        p75,
+
+        tipo="seccion"
+
+    )
+
+    pdf = libro.generar()
+
+    st.download_button(
+
+        "📄 Descargar Libro de Sección",
+
+        data=pdf,
+
+        file_name=f"Libro_Seccion_{codigo}.pdf",
+
+        mime="application/pdf"
+
+    )
+
+# =====================================================
+# DISEÑO PRINCIPAL
+# =====================================================
+
+col_mapa, col_detalle = st.columns([7, 3])
+
+# =====================================================
+# MAPA
+# =====================================================
+
+with col_mapa:
+
+    if es_pasillo:
+
+        st.subheader(f"Mapa de calor · {pasillo}")
+
+        rack = dibujar_heatmap(
+            resumen_vista,
+            pasillo,
+            p25,
+            p50,
+            p75
+        )
+
+    else:
+
+        st.subheader(f"Sección {DPTS[codigo]}")
+
+        rack = None
+        pasillo_rack = None
+
+        pasillos_seccion = sorted(
+            df_vista["pasillo_completo"].unique()
+        )
+
+        for pasillo_actual in pasillos_seccion:
+
+            st.markdown("---")
+
+            st.markdown(f"## 📦 {pasillo_actual}")
+
+            rack_tmp = dibujar_heatmap(
+                resumen_vista,
+                pasillo_actual,
+                p25,
+                p50,
+                p75
+            )
+
+            if rack_tmp is not None:
+
+                rack = rack_tmp
+                pasillo_rack = pasillo_actual
+
+
+# =====================================================
 # DETALLE
-# ==========================================
+# =====================================================
 
 with col_detalle:
 
     st.subheader("Detalle")
 
-    if rack is None:
+    if es_pasillo:
 
-        st.info("Selecciona un rack del mapa.")
+        if rack is None:
+
+            st.info("Selecciona un rack.")
+
+        else:
+
+            mostrar_rack(
+                df,
+                pasillo,
+                rack
+            )
 
     else:
 
-        mostrar_rack(
-            df,
-            pasillo,
-            rack
-        )
+        if rack is None:
+
+            st.info("Selecciona un rack de cualquier pasillo.")
+
+        else:
+
+            mostrar_rack(
+                df,
+                pasillo_rack,
+                rack
+            )
