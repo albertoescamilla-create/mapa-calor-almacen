@@ -45,7 +45,7 @@ st.set_page_config(
 )
 
 st.title(TITULO_APP)
-st.caption("Versión 1.1.0")
+st.caption("Versión 1.2.0")
 
 
 with st.sidebar:
