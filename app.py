@@ -52,7 +52,7 @@ with st.sidebar:
 
     st.divider()
     st.caption("Mapa de Calor del Almacén LS")
-    st.caption("v1.1.0")
+    st.caption("v1.2.0")
     st.caption("© Julio 2026")
     st.caption("Desarrollado por Alberto Escamilla")
 
